@@ -5,23 +5,21 @@ from azure.mgmt.compute import ComputeManagementClient
 
 app = Flask(__name__)
 
-# Load Azure Subscription ID from environment variable
-subscription_id = os.getenv("SUBSCRIPTION_ID", "84a4c20d-c4cc-44d6-8a5b-23f7253c12c4")
+# Load subscription ID from environment
+subscription_id = os.getenv("SUBSCRIPTION_ID")
 
-# Authenticate using Managed Identity / Service Principal
+# Initialize Azure credential
 credential = DefaultAzureCredential()
 compute_client = ComputeManagementClient(credential, subscription_id)
 
 def get_vm_inventory():
     vm_list = []
     for vm in compute_client.virtual_machines.list_all():
-        # Extract resource group from the VM ID
         resource_group = vm.id.split("/")[4]
 
-        # Get VM instance view to check power status
+        # Get instance view for power status
         instance_view = compute_client.virtual_machines.instance_view(
-            resource_group,
-            vm.name
+            resource_group, vm.name
         )
         status = "Unknown"
         if instance_view.statuses:
@@ -45,5 +43,6 @@ def home():
 def api_vms():
     return jsonify(get_vm_inventory())
 
+# Only used for local debugging
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
