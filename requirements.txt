@@ -1,4 +1,5 @@
-flask
+Flask
 azure-identity
 azure-mgmt-compute
 gunicorn
+requests
