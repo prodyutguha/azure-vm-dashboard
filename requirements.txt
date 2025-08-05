@@ -1,5 +1,5 @@
 Flask
+gunicorn
 azure-identity
 azure-mgmt-compute
-gunicorn
 requests
