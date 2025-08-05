@@ -1,15 +1,17 @@
 import os
 import threading
 from flask import Flask, render_template, jsonify
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
 
 app = Flask(__name__)
 
-# Cache to store VM data
+# Cache for VM inventory
 vm_cache = []
 is_loading = False
 
 def fetch_vm_inventory():
-    """Fetch VM inventory in the background to avoid timeouts."""
+    """Fetch VM inventory from Azure in background to avoid timeout."""
     global vm_cache, is_loading
     is_loading = True
     vm_cache = []
@@ -17,12 +19,9 @@ def fetch_vm_inventory():
     try:
         subscription_id = os.getenv("SUBSCRIPTION_ID")
         if not subscription_id:
-            vm_cache = [{"error": "SUBSCRIPTION_ID is missing in App Settings"}]
+            vm_cache = [{"error": "SUBSCRIPTION_ID environment variable is missing"}]
             is_loading = False
             return
-
-        from azure.identity import DefaultAzureCredential
-        from azure.mgmt.compute import ComputeManagementClient
 
         credential = DefaultAzureCredential()
         compute_client = ComputeManagementClient(credential, subscription_id)
@@ -31,11 +30,9 @@ def fetch_vm_inventory():
         for vm in compute_client.virtual_machines.list_all():
             resource_group = vm.id.split("/")[4]
 
-            # Get instance view for power status (safe)
+            # Get instance view safely
             try:
-                instance_view = compute_client.virtual_machines.instance_view(
-                    resource_group, vm.name
-                )
+                instance_view = compute_client.virtual_machines.instance_view(resource_group, vm.name)
                 status = instance_view.statuses[-1].display_status if instance_view.statuses else "Unknown"
             except Exception:
                 status = "Unknown"
@@ -55,15 +52,13 @@ def fetch_vm_inventory():
     finally:
         is_loading = False
 
-
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
 @app.route("/api/vms")
 def api_vms():
-    """Return cached VM data immediately; trigger background refresh if needed."""
+    """Return cached VM data; trigger background refresh if empty."""
     global vm_cache, is_loading
 
     if not vm_cache and not is_loading:
@@ -75,5 +70,5 @@ def api_vms():
 
     return jsonify(vm_cache)
 
-
-# No app.run() here because Azure uses Gunicorn
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
