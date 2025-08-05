@@ -16,10 +16,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Validate requirements.txt
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ ! -f requirements.txt ]; then
+            echo "requirements.txt is missing!" && exit 1
+          fi
 
       - name: Login to Azure
         uses: azure/login@v1
