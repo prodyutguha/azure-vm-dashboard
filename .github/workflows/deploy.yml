@@ -1,7 +1,7 @@
 name: Deploy Flask to Azure App Service (Manual)
 
 on:
-  workflow_dispatch:   # Manual trigger only
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -29,5 +29,5 @@ jobs:
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: "AzureFlaskApp"  # Must match your App Service name
+          app-name: "AzureFlaskApp"
           package: .

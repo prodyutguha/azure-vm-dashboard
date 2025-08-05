@@ -1,8 +1,6 @@
 import os
 import threading
 from flask import Flask, render_template, jsonify
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.compute import ComputeManagementClient
 
 app = Flask(__name__)
 
@@ -19,9 +17,12 @@ def fetch_vm_inventory():
     try:
         subscription_id = os.getenv("SUBSCRIPTION_ID")
         if not subscription_id:
-            vm_cache = [{"error": "SUBSCRIPTION_ID environment variable is missing"}]
+            vm_cache = [{"error": "SUBSCRIPTION_ID is missing in App Settings"}]
             is_loading = False
             return
+
+        from azure.identity import DefaultAzureCredential
+        from azure.mgmt.compute import ComputeManagementClient
 
         credential = DefaultAzureCredential()
         compute_client = ComputeManagementClient(credential, subscription_id)
@@ -30,7 +31,7 @@ def fetch_vm_inventory():
         for vm in compute_client.virtual_machines.list_all():
             resource_group = vm.id.split("/")[4]
 
-            # Get instance view for power status (safe call)
+            # Get instance view for power status (safe)
             try:
                 instance_view = compute_client.virtual_machines.instance_view(
                     resource_group, vm.name
@@ -65,17 +66,14 @@ def api_vms():
     """Return cached VM data immediately; trigger background refresh if needed."""
     global vm_cache, is_loading
 
-    # If cache is empty and not currently loading, start background fetch
     if not vm_cache and not is_loading:
         threading.Thread(target=fetch_vm_inventory, daemon=True).start()
         return jsonify({"status": "loading", "message": "Fetching VM inventory. Please refresh in a few seconds."})
 
-    # If loading, tell user to wait
     if is_loading:
         return jsonify({"status": "loading", "message": "Still fetching VM inventory. Please refresh."})
 
     return jsonify(vm_cache)
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+# No app.run() here because Azure uses Gunicorn
