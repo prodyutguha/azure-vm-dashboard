@@ -102,6 +102,9 @@ resource "azurerm_linux_virtual_machine" "vm" {
   admin_password        = var.admin_password
   network_interface_ids = [azurerm_network_interface.nic.id]
 
+
+  disable_password_authentication = false
+
   identity {
     type = "SystemAssigned"
   }
@@ -116,10 +119,6 @@ resource "azurerm_linux_virtual_machine" "vm" {
     offer     = "UbuntuServer"
     sku       = "22_04-lts"
     version   = "latest"
-  }
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = file("~/.ssh/id_rsa.pub")
   }
 
   custom_data = base64encode(<<-EOF
