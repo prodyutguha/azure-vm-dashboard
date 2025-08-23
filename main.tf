@@ -7,7 +7,7 @@ resource "azurerm_resource_group" "rg" {
 }
 
 # -----------------------
-# Virtual Network & Subnet
+# VNet & Subnet
 # -----------------------
 resource "azurerm_virtual_network" "vnet" {
   name                = "vm-vnet"
@@ -34,7 +34,7 @@ resource "azurerm_public_ip" "public_ip" {
 }
 
 # -----------------------
-# Network Security Group
+# NSG
 # -----------------------
 resource "azurerm_network_security_group" "nsg" {
   name                = "${var.vm_name}-nsg"
@@ -47,10 +47,10 @@ resource "azurerm_network_security_group" "nsg" {
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
-    source_port_range           = "*"
-    destination_port_range      = "80"
-    source_address_prefix       = "*"
-    destination_address_prefix  = "*"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 
   security_rule {
@@ -59,15 +59,15 @@ resource "azurerm_network_security_group" "nsg" {
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
-    source_port_range           = "*"
-    destination_port_range      = "22"
-    source_address_prefix       = "*"
-    destination_address_prefix  = "*"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
 # -----------------------
-# Network Interface
+# NIC
 # -----------------------
 resource "azurerm_network_interface" "nic" {
   name                = "${var.vm_name}-nic"
@@ -88,7 +88,7 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 }
 
 # -----------------------
-# Linux VM with Password Authentication
+# Linux VM
 # -----------------------
 resource "azurerm_linux_virtual_machine" "web" {
   name                = var.vm_name
@@ -115,7 +115,7 @@ resource "azurerm_linux_virtual_machine" "web" {
 }
 
 # -----------------------
-# Custom Script Extension: Install Flask Dashboard
+# Custom Script Extension (Flask dashboard)
 # -----------------------
 resource "azurerm_virtual_machine_extension" "flask_dashboard" {
   name                  = "flask-dashboard"
@@ -127,18 +127,13 @@ resource "azurerm_virtual_machine_extension" "flask_dashboard" {
   settings = <<SETTINGS
 {
   "commandToExecute": "sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip && mkdir -p /opt/vm-dashboard && cd /opt/vm-dashboard && python3 -m venv .venv && . .venv/bin/activate && pip install flask gunicorn && cat > /opt/vm-dashboard/app.py << 'PYCODE'
-from flask import Flask, jsonify
-import os
+from flask import Flask
 import subprocess
-
 app = Flask(__name__)
-
 @app.route('/')
 def home():
-    # Simple dashboard showing VM info
     hostname = subprocess.getoutput('hostname')
     return f'<h1>Azure VM Dashboard</h1><p>VM Name: {hostname}</p>'
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
 PYCODE
@@ -160,4 +155,3 @@ UNIT
 }
 SETTINGS
 }
-

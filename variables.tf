@@ -19,7 +19,7 @@ variable "admin_username" {
 }
 
 variable "admin_password" {
-  type    = string
+  type = string
 }
 
 variable "subscription_id" { type = string }

@@ -1,0 +1,5 @@
+subscription_id = "YOUR_SUBSCRIPTION_ID"
+tenant_id       = "YOUR_TENANT_ID"
+client_id       = "YOUR_CLIENT_ID"
+client_secret   = "YOUR_CLIENT_SECRET"
+admin_password  = "YOUR_VM_PASSWORD"
