@@ -147,9 +147,25 @@ HTML_TEMPLATE = """
 <body>
 <h1>Azure VM Dashboard</h1>
 <table border="1">
-<tr><th>Name</th><th>Resource Group</th><th>Location</th></tr>
+<tr>
+  <th>Name</th>
+  <th>Resource Group</th>
+  <th>Location</th>
+  <th>OS</th>
+  <th>Disks</th>
+</tr>
 {% for vm in vms %}
-<tr><td>{{ vm.name }}</td><td>{{ vm.resource_group }}</td><td>{{ vm.location }}</td></tr>
+<tr>
+  <td>{{ vm.name }}</td>
+  <td>{{ vm.resource_group }}</td>
+  <td>{{ vm.location }}</td>
+  <td>{{ vm.os_type }}</td>
+  <td>
+    {% for disk in vm.disks %}
+      {{ disk.type }}: {{ disk.name }} ({{ disk.size_gb }} GB)<br>
+    {% endfor %}
+  </td>
+</tr>
 {% endfor %}
 </table>
 </body>
@@ -160,11 +176,27 @@ HTML_TEMPLATE = """
 def index():
     vms = []
     for vm in compute_client.virtual_machines.list_all():
+        os_disk = vm.storage_profile.os_disk
+        disks = [{
+            "name": os_disk.name,
+            "size_gb": os_disk.disk_size_gb,
+            "type": "OS Disk"
+        }]
+        for data_disk in vm.storage_profile.data_disks:
+            disks.append({
+                "name": data_disk.name,
+                "size_gb": data_disk.disk_size_gb,
+                "type": "Data Disk"
+            })
+
         vms.append({
             "name": vm.name,
             "location": vm.location,
-            "resource_group": vm.id.split("/")[4]
+            "resource_group": vm.id.split("/")[4],
+            "os_type": os_disk.os_type.value,
+            "disks": disks
         })
+
     return render_template_string(HTML_TEMPLATE, vms=vms)
 
 if __name__ == "__main__":
@@ -173,8 +205,9 @@ APP
 
     export AZURE_SUBSCRIPTION_ID="${var.subscription_id}"
     nohup python3 app.py &
-  EOF
-  )
+EOF
+)
+
 }
 
 # ########################################################
