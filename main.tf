@@ -75,7 +75,6 @@ resource "azurerm_network_interface" "nic" {
   }
 }
 
-# Linux VM with Flask setup via cloud-init
 resource "azurerm_linux_virtual_machine" "vm" {
   name                = "${var.rg_name}-vm"
   resource_group_name = azurerm_resource_group.rg.name
@@ -93,11 +92,11 @@ resource "azurerm_linux_virtual_machine" "vm" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "UbuntuServer"
-    sku       = "22.04-LTS"
+    sku       = "22_04-lts"
     version   = "latest"
   }
 
-  custom_data = <<-EOF
+  custom_data = base64encode(<<-EOF
     #!/bin/bash
     apt update
     apt install -y python3-pip git
@@ -152,4 +151,5 @@ APP
     export AZURE_SUBSCRIPTION_ID="${var.subscription_id}"
     nohup python3 app.py &
   EOF
+  )
 }
