@@ -1,31 +1,37 @@
-name: Terraform Azure Flask VM Deploy
+name: Deploy Azure VM and Flask Dashboard
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'apply'
+        type: choice
+        options: ['plan', 'apply']
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.7.5
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.6.0
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Terraform Init
+      run: terraform init
+      working-directory: ./terraform
 
-      - name: Terraform Init
-        run: terraform init
+    - name: Terraform Plan
+      if: github.event.inputs.action == 'plan'
+      run: terraform plan -out=tfplan
+      working-directory: ./terraform
 
-      - name: Terraform Plan
-        run: terraform plan -out=tfplan -var-file="terraform.tfvars"
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+    - name: Terraform Apply
+      if: github.event.inputs.action == 'apply'
+      run: terraform apply -auto-approve
+      working-directory: ./terraform

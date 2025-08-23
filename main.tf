@@ -1,61 +1,36 @@
-# -----------------------
+
+
 # Resource Group
-# -----------------------
 resource "azurerm_resource_group" "rg" {
-  name     = var.resource_group_name
+  name     = var.rg_name
   location = var.location
 }
 
-# -----------------------
-# VNet & Subnet
-# -----------------------
+# Virtual Network
 resource "azurerm_virtual_network" "vnet" {
-  name                = "vm-vnet"
+  name                = "${var.rg_name}-vnet"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
 
+# Subnet
 resource "azurerm_subnet" "subnet" {
-  name                 = "vm-subnet"
+  name                 = "${var.rg_name}-subnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-# -----------------------
-# Public IP
-# -----------------------
-resource "azurerm_public_ip" "public_ip" {
-  name                = "${var.vm_name}-public-ip"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
-}
-
-# -----------------------
 # NSG
-# -----------------------
 resource "azurerm_network_security_group" "nsg" {
-  name                = "${var.vm_name}-nsg"
+  name                = "${var.rg_name}-nsg"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
   security_rule {
-    name                       = "Allow-HTTP"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "Allow-SSH"
-    priority                   = 101
+    name                       = "SSH"
+    priority                   = 1001
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -64,13 +39,31 @@ resource "azurerm_network_security_group" "nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  security_rule {
+    name                       = "HTTP"
+    priority                   = 1002
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
-# -----------------------
-# NIC
-# -----------------------
+# Public IP
+resource "azurerm_public_ip" "ip" {
+  name                = "${var.rg_name}-public-ip"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Dynamic"
+}
+
+# Network Interface
 resource "azurerm_network_interface" "nic" {
-  name                = "${var.vm_name}-nic"
+  name                = "${var.rg_name}-nic"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -78,27 +71,18 @@ resource "azurerm_network_interface" "nic" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.subnet.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.public_ip.id
+    public_ip_address_id           = azurerm_public_ip.ip.id
   }
 }
 
-resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
-  network_interface_id      = azurerm_network_interface.nic.id
-  network_security_group_id = azurerm_network_security_group.nsg.id
-}
-
-# -----------------------
-# Linux VM
-# -----------------------
-resource "azurerm_linux_virtual_machine" "web" {
-  name                = var.vm_name
+# Linux VM with Flask setup via cloud-init
+resource "azurerm_linux_virtual_machine" "vm" {
+  name                = "${var.rg_name}-vm"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  size                = "Standard_B1s"
+  size                = var.vm_size
   admin_username      = var.admin_username
   admin_password      = var.admin_password
-  disable_password_authentication = false
-
   network_interface_ids = [azurerm_network_interface.nic.id]
 
   os_disk {
@@ -109,54 +93,63 @@ resource "azurerm_linux_virtual_machine" "web" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "UbuntuServer"
-    sku       = "20_04-lts"
+    sku       = "22.04-LTS"
     version   = "latest"
   }
-}
 
-# -----------------------
-# Custom Script Extension (Flask dashboard)
-# -----------------------
-resource "azurerm_virtual_machine_extension" "flask_dashboard" {
-  name                 = "flask-dashboard"
-  virtual_machine_id   = azurerm_linux_virtual_machine.web.id
-  publisher            = "Microsoft.Azure.Extensions"
-  type                 = "CustomScript"
-  type_handler_version = "2.1"
+  custom_data = <<-EOF
+    #!/bin/bash
+    apt update
+    apt install -y python3-pip git
+    pip3 install flask azure-identity azure-mgmt-compute
+    mkdir -p /home/${var.admin_username}/flaskapp
+    cd /home/${var.admin_username}/flaskapp
 
-  settings = jsonencode({
-    commandToExecute = <<EOT
-sudo apt-get update -y && \
-sudo apt-get install -y python3 python3-venv python3-pip && \
-mkdir -p /opt/vm-dashboard && cd /opt/vm-dashboard && \
-python3 -m venv .venv && . .venv/bin/activate && \
-pip install flask gunicorn && \
-cat > /opt/vm-dashboard/app.py << 'PYCODE'
-from flask import Flask
-import subprocess
+    # Flask app
+    cat <<'APP' > app.py
+from flask import Flask, render_template_string
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
+import os
+
 app = Flask(__name__)
-@app.route('/')
-def home():
-    hostname = subprocess.getoutput('hostname')
-    return f'<h1>Azure VM Dashboard</h1><p>VM Name: {hostname}</p>'
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80)
-PYCODE
-&& cat > /etc/systemd/system/vm-dashboard.service << 'UNIT'
-[Unit]
-Description=Azure VM Dashboard (Flask via Gunicorn)
-After=network-online.target
-Wants=network-online.target
-[Service]
-Type=simple
-WorkingDirectory=/opt/vm-dashboard
-ExecStart=/opt/vm-dashboard/.venv/bin/gunicorn --bind 0.0.0.0:80 app:app
-Restart=always
-RestartSec=3
-[Install]
-WantedBy=multi-user.target
-UNIT
-&& systemctl daemon-reload && systemctl enable --now vm-dashboard.service
-EOT
-  })
+
+subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+credential = DefaultAzureCredential()
+compute_client = ComputeManagementClient(credential, subscription_id)
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head><title>Azure VM Dashboard</title></head>
+<body>
+<h1>Azure VM Dashboard</h1>
+<table border="1">
+<tr><th>Name</th><th>Resource Group</th><th>Location</th></tr>
+{% for vm in vms %}
+<tr><td>{{ vm.name }}</td><td>{{ vm.resource_group }}</td><td>{{ vm.location }}</td></tr>
+{% endfor %}
+</table>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    vms = []
+    for vm in compute_client.virtual_machines.list_all():
+        vms.append({
+            "name": vm.name,
+            "location": vm.location,
+            "resource_group": vm.id.split("/")[4]
+        })
+    return render_template_string(HTML_TEMPLATE, vms=vms)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=80)
+APP
+
+    export AZURE_SUBSCRIPTION_ID="${var.subscription_id}"
+    nohup python3 app.py &
+  EOF
 }
