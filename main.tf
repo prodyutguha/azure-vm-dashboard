@@ -118,15 +118,20 @@ resource "azurerm_linux_virtual_machine" "web" {
 # Custom Script Extension (Flask dashboard)
 # -----------------------
 resource "azurerm_virtual_machine_extension" "flask_dashboard" {
-  name                  = "flask-dashboard"
-  virtual_machine_id    = azurerm_linux_virtual_machine.web.id
-  publisher             = "Microsoft.Azure.Extensions"
-  type                  = "CustomScript"
-  type_handler_version  = "2.1"
+  name                 = "flask-dashboard"
+  virtual_machine_id   = azurerm_linux_virtual_machine.web.id
+  publisher            = "Microsoft.Azure.Extensions"
+  type                 = "CustomScript"
+  type_handler_version = "2.1"
 
-  settings = <<SETTINGS
-{
-  "commandToExecute": "sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip && mkdir -p /opt/vm-dashboard && cd /opt/vm-dashboard && python3 -m venv .venv && . .venv/bin/activate && pip install flask gunicorn && cat > /opt/vm-dashboard/app.py << 'PYCODE'
+  settings = jsonencode({
+    commandToExecute = <<EOT
+sudo apt-get update -y && \
+sudo apt-get install -y python3 python3-venv python3-pip && \
+mkdir -p /opt/vm-dashboard && cd /opt/vm-dashboard && \
+python3 -m venv .venv && . .venv/bin/activate && \
+pip install flask gunicorn && \
+cat > /opt/vm-dashboard/app.py << 'PYCODE'
 from flask import Flask
 import subprocess
 app = Flask(__name__)
@@ -151,7 +156,7 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 UNIT
-&& systemctl daemon-reload && systemctl enable --now vm-dashboard.service"
-}
-SETTINGS
+&& systemctl daemon-reload && systemctl enable --now vm-dashboard.service
+EOT
+  })
 }
