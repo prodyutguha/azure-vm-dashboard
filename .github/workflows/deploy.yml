@@ -1,34 +1,32 @@
-name: Deploy Flask to Azure App Service (Manual)
+name: Manual Azure Webserver Deploy
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger
 
 jobs:
-  build-and-deploy:
+  terraform:
+    name: Deploy Webserver
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          python-version: '3.10'
+          terraform_version: 1.9.5
 
-      - name: Validate requirements.txt
-        run: |
-          if [ ! -f requirements.txt ]; then
-            echo "requirements.txt is missing!" && exit 1
-          fi
-
-      - name: Login to Azure
-        uses: azure/login@v1
+      - name: Azure Login
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Azure WebApp
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: "AzureDashboard"
-          package: .
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
