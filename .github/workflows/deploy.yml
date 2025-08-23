@@ -29,9 +29,9 @@ jobs:
     - name: Terraform Plan
       if: github.event.inputs.action == 'plan'
       run: terraform plan -out=tfplan
-      working-directory: ./terraform
+      working-directory: ./azure-vm-dashboard/terraform
 
     - name: Terraform Apply
       if: github.event.inputs.action == 'apply'
       run: terraform apply -auto-approve
-      working-directory: ./terraform
+      working-directory: ./azure-vm-dashboard/terraform
