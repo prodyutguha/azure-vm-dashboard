@@ -1,45 +1,28 @@
+variable "resource_group_name" {
+  type    = string
+  default = "vm-web-rg"
+}
+
 variable "location" {
-  description = "Azure region"
-  type        = string
-  default     = "East US"
+  type    = string
+  default = "East US"
 }
 
-variable "rg_name" {
-  description = "Resource group name"
-  type        = string
-  default     = "webapp-rg"
-}
-
-variable "vnet_cidr" {
-  description = "VNet CIDR"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "subnet_cidr" {
-  description = "Subnet CIDR"
-  type        = string
-  default     = "10.0.1.0/24"
-}
-
-variable "vm_size" {
-  description = "VM size"
-  type        = string
-  default     = "Standard_B1s"
+variable "vm_name" {
+  type    = string
+  default = "web-vm"
 }
 
 variable "admin_username" {
-  description = "Linux admin username"
-  type        = string
-  default     = "azureuser"
+  type    = string
+  default = "azureuser"
 }
 
-variable "ssh_public_key" {
-  description = "Your SSH public key (ssh-rsa ...)"
-  type        = string
+variable "admin_password" {
+  type    = string
 }
 
 variable "subscription_id" { type = string }
-variable "tenant_id" { type = string }
-variable "client_id" { type = string }
-variable "client_secret" { type = string }
+variable "tenant_id"       { type = string }
+variable "client_id"       { type = string }
+variable "client_secret"   { type = string }

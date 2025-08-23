@@ -1,135 +1,163 @@
+# -----------------------
 # Resource Group
+# -----------------------
 resource "azurerm_resource_group" "rg" {
-  name     = var.rg_name
+  name     = var.resource_group_name
   location = var.location
 }
 
-# VNet + Subnet
+# -----------------------
+# Virtual Network & Subnet
+# -----------------------
 resource "azurerm_virtual_network" "vnet" {
-  name                = "webapp-vnet"
-  address_space       = [var.vnet_cidr]
+  name                = "vm-vnet"
+  address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
 
 resource "azurerm_subnet" "subnet" {
-  name                 = "webapp-subnet"
+  name                 = "vm-subnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.subnet_cidr]
+  address_prefixes     = ["10.0.1.0/24"]
 }
 
+# -----------------------
 # Public IP
-resource "azurerm_public_ip" "pip" {
-  name                = "webapp-pip"
+# -----------------------
+resource "azurerm_public_ip" "public_ip" {
+  name                = "${var.vm_name}-public-ip"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
+  allocation_method   = "Dynamic"
 }
 
-# NSG + rules
+# -----------------------
+# Network Security Group
+# -----------------------
 resource "azurerm_network_security_group" "nsg" {
-  name                = "webapp-nsg"
+  name                = "${var.vm_name}-nsg"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
+
+  security_rule {
+    name                       = "Allow-HTTP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range           = "*"
+    destination_port_range      = "80"
+    source_address_prefix       = "*"
+    destination_address_prefix  = "*"
+  }
+
+  security_rule {
+    name                       = "Allow-SSH"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range           = "*"
+    destination_port_range      = "22"
+    source_address_prefix       = "*"
+    destination_address_prefix  = "*"
+  }
 }
 
-resource "azurerm_network_security_rule" "allow_http" {
-  name                        = "allow-http"
-  priority                    = 100
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "80"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.rg.name
-  network_security_group_name = azurerm_network_security_group.nsg.name
-}
-
-resource "azurerm_network_security_rule" "allow_ssh" {
-  name                        = "allow-ssh"
-  priority                    = 110
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "22"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.rg.name
-  network_security_group_name = azurerm_network_security_group.nsg.name
-}
-
-# NIC
+# -----------------------
+# Network Interface
+# -----------------------
 resource "azurerm_network_interface" "nic" {
-  name                = "webapp-nic"
+  name                = "${var.vm_name}-nic"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
   ip_configuration {
-    name                          = "ipconfig"
+    name                          = "internal"
     subnet_id                     = azurerm_subnet.subnet.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.pip.id
+    public_ip_address_id          = azurerm_public_ip.public_ip.id
   }
 }
 
-# Associate NSG to NIC
-resource "azurerm_network_interface_security_group_association" "nic_nsg" {
+resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_interface_id      = azurerm_network_interface.nic.id
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-# Linux VM with system-assigned identity
-resource "azurerm_linux_virtual_machine" "vm" {
-  name                = "webapp-vm"
+# -----------------------
+# Linux VM with Password Authentication
+# -----------------------
+resource "azurerm_linux_virtual_machine" "web" {
+  name                = var.vm_name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  size                = var.vm_size
+  size                = "Standard_B1s"
   admin_username      = var.admin_username
+  admin_password      = var.admin_password
+  disable_password_authentication = false
+
   network_interface_ids = [azurerm_network_interface.nic.id]
 
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.ssh_public_key
-  }
-
   os_disk {
-    name                 = "webapp-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
   }
 
   source_image_reference {
     publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts"
+    offer     = "UbuntuServer"
+    sku       = "20_04-lts"
     version   = "latest"
   }
-
-  # Enable Managed Identity so the app can list VMs
-  identity {
-    type = "SystemAssigned"
-  }
-
-  custom_data = base64encode(
-    templatefile("${path.module}/cloud-init.tpl", {
-      rg_name = azurerm_resource_group.rg.name
-    })
-  )
-
-  depends_on = [
-    azurerm_network_interface_security_group_association.nic_nsg
-  ]
 }
 
-# Give the VM's identity Reader on the Resource Group (least privilege).
-resource "azurerm_role_assignment" "vm_reader_rg" {
-  scope                = azurerm_resource_group.rg.id
-  role_definition_name = "Reader"
-  principal_id         = azurerm_linux_virtual_machine.vm.identity[0].principal_id
+# -----------------------
+# Custom Script Extension: Install Flask Dashboard
+# -----------------------
+resource "azurerm_virtual_machine_extension" "flask_dashboard" {
+  name                  = "flask-dashboard"
+  virtual_machine_id    = azurerm_linux_virtual_machine.web.id
+  publisher             = "Microsoft.Azure.Extensions"
+  type                  = "CustomScript"
+  type_handler_version  = "2.1"
+
+  settings = <<SETTINGS
+{
+  "commandToExecute": "sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip && mkdir -p /opt/vm-dashboard && cd /opt/vm-dashboard && python3 -m venv .venv && . .venv/bin/activate && pip install flask gunicorn && cat > /opt/vm-dashboard/app.py << 'PYCODE'
+from flask import Flask, jsonify
+import os
+import subprocess
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    # Simple dashboard showing VM info
+    hostname = subprocess.getoutput('hostname')
+    return f'<h1>Azure VM Dashboard</h1><p>VM Name: {hostname}</p>'
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80)
+PYCODE
+&& cat > /etc/systemd/system/vm-dashboard.service << 'UNIT'
+[Unit]
+Description=Azure VM Dashboard (Flask via Gunicorn)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+WorkingDirectory=/opt/vm-dashboard
+ExecStart=/opt/vm-dashboard/.venv/bin/gunicorn --bind 0.0.0.0:80 app:app
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+UNIT
+&& systemctl daemon-reload && systemctl enable --now vm-dashboard.service"
+}
+SETTINGS
 }
 
