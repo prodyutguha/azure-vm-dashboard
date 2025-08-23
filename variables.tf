@@ -6,7 +6,7 @@ variable "rg_name" {
 }
 
 variable "location" {
-  default = "East US"
+  default = "West Europe"
 }
 
 variable "vm_size" {
