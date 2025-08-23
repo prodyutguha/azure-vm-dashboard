@@ -24,7 +24,7 @@ jobs:
 
     - name: Terraform Init
       run: terraform init
-      working-directory: ./terraform
+      working-directory: ./
 
     - name: Terraform Plan
       if: github.event.inputs.action == 'plan'
