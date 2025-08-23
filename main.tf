@@ -177,14 +177,14 @@ APP
   )
 }
 
-########################################################
-# ASSIGN READER ROLE TO MANAGED IDENTITY
-########################################################
-resource "azurerm_role_assignment" "vm_reader" {
-  principal_id         = azurerm_linux_virtual_machine.vm.identity[0].principal_id
-  role_definition_name = "Reader"
-  scope                = azurerm_resource_group.rg.id
-}
+# ########################################################
+# # ASSIGN READER ROLE TO MANAGED IDENTITY
+# ########################################################
+# resource "azurerm_role_assignment" "vm_reader" {
+#   principal_id         = azurerm_linux_virtual_machine.vm.identity[0].principal_id
+#   role_definition_name = "Reader"
+#   scope                = azurerm_resource_group.rg.id
+# }
 
 ########################################################
 # OUTPUTS
